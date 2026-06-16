@@ -1058,7 +1058,11 @@ function ChecklistAxialApp() {
   }
 
   function novoChecklist() {
-    setTela('selecionar_tipo');
+    // O checklist de veículo foi desativado: o colaborador vai direto para
+    // o fluxo de equipamento, sem passar pela tela de seleção de tipo.
+    setTipoChecklist('equipamento');
+    setDados(estadoInicialEquipamento());
+    setTela('identificacao');
   }
 
   function selecionarTipo(tipo) {
@@ -1233,7 +1237,7 @@ function ChecklistAxialApp() {
           dados={dados}
           setDados={setDados}
           onProximo={() => setTela('fotos')}
-          onVoltar={() => setTela('selecionar_tipo')}
+          onVoltar={() => setTela('home')}
         />
       )}
       {tela === 'identificacao' && tipoChecklist === 'veiculo' && (
