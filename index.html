@@ -621,16 +621,22 @@ async function apagarChecklistDoSupabase(id) {
   }
 }
 
-async function apagarTodosChecklistsDoSupabase() {
+async function apagarChecklistsPorIds(ids) {
   if (!supabaseClient) throw new Error('Supabase não inicializado');
-  // Pra apagar todos, fazemos um delete com filtro que sempre é verdadeiro
-  const { error } = await supabaseClient
-    .from('checklists')
-    .delete()
-    .gte('id', 0);
-  if (error) {
-    console.error('Erro ao apagar todos:', error);
-    throw new Error('Não foi possível apagar todos: ' + error.message);
+  const lista = (ids || []).filter(Boolean);
+  if (lista.length === 0) return;
+  // Apaga em lotes para não estourar limites da query em seleções grandes
+  const TAMANHO_LOTE = 100;
+  for (let i = 0; i < lista.length; i += TAMANHO_LOTE) {
+    const lote = lista.slice(i, i + TAMANHO_LOTE);
+    const { error } = await supabaseClient
+      .from('checklists')
+      .delete()
+      .in('id', lote);
+    if (error) {
+      console.error('Erro ao apagar checklists:', error);
+      throw new Error('Não foi possível apagar: ' + error.message);
+    }
   }
 }
 
@@ -1118,16 +1124,18 @@ function ChecklistAxialApp() {
     }
   }
 
-  async function adminApagarTodos() {
+  async function adminApagarTodos(idsFiltrados) {
+    const ids = idsFiltrados || [];
     if (USAR_MOCKS) {
-      setChecklistsAdmin([]);
+      setChecklistsAdmin(prev => prev.filter(c => !ids.includes(c.id)));
       return;
     }
     try {
-      await apagarTodosChecklistsDoSupabase();
-      setChecklistsAdmin([]);
+      await apagarChecklistsPorIds(ids);
+      // Atualiza a lista local removendo os apagados
+      setChecklistsAdmin(prev => prev.filter(c => !ids.includes(c.id)));
     } catch (e) {
-      alert('Não foi possível apagar todos os checklists.\n\n' + (e.message || ''));
+      alert('Não foi possível apagar os checklists.\n\n' + (e.message || ''));
     }
   }
 
@@ -5624,10 +5632,19 @@ function TelaAdminDashboard({ checklists, carregando, erro, ultimaAtualizacao, o
   }
 
   function confirmarApagarTodos() {
-    if (checklists.length === 0) return;
-    if (window.confirm(`Tem certeza que deseja apagar TODOS os ${checklists.length} checklists? Esta ação não pode ser desfeita.`)) {
-      if (window.confirm('Confirma a exclusão de TODOS os registros?')) {
-        onApagarTodos();
+    if (filtrados.length === 0) {
+      alert('Não há checklists selecionados para apagar.');
+      return;
+    }
+    const temFiltro = busca || filtroTipo !== 'todos' || filtroStatus !== 'todos' || filtroData || filtroDataIni || filtroDataFim;
+    const qtd = filtrados.length;
+    const msg1 = temFiltro
+      ? `Apagar os ${qtd} checklists que estão filtrados na tela? Esta ação não pode ser desfeita.`
+      : `Não há filtro ativo. Isso vai apagar TODOS os ${qtd} checklists. Esta ação não pode ser desfeita.`;
+    if (window.confirm(msg1)) {
+      if (window.confirm(`Confirma a exclusão de ${qtd} registro(s)?`)) {
+        const ids = filtrados.map(c => c.id);
+        onApagarTodos(ids);
       }
     }
   }
@@ -5957,23 +5974,24 @@ function TelaAdminDashboard({ checklists, carregando, erro, ultimaAtualizacao, o
           </button>
           <button
             onClick={confirmarApagarTodos}
-            disabled={checklists.length === 0}
+            disabled={filtrados.length === 0}
+            title="Apaga os checklists que estão filtrados na tela"
             style={{
-              background: checklists.length === 0 ? COLORS.gray200 : COLORS.danger,
-              color: checklists.length === 0 ? COLORS.gray500 : 'white',
+              background: filtrados.length === 0 ? COLORS.gray200 : COLORS.danger,
+              color: filtrados.length === 0 ? COLORS.gray500 : 'white',
               border: 'none',
               padding: '12px 20px',
               borderRadius: 10,
               fontSize: 14,
               fontWeight: 700,
-              cursor: checklists.length === 0 ? 'not-allowed' : 'pointer',
+              cursor: filtrados.length === 0 ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               gap: 8,
             }}
           >
-            <Trash2 size={18} /> Apagar Todos
+            <Trash2 size={18} /> Apagar ({filtrados.length})
           </button>
         </div>
 
